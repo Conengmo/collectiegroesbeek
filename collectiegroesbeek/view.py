@@ -1,3 +1,7 @@
+import subprocess
+import os
+import hmac
+
 import flask
 
 from . import app
@@ -78,3 +82,22 @@ def search_maatboek_heemskerk():
                                  hits_total=hits_total,
                                  query_string=query_string,
                                  page_range=page_range, page=page)
+
+
+@app.route('/deploy', methods=['POST'])
+def trigger_git_pull():
+    github_hasher()
+    payload = flask.request.get_json()
+    branch = payload['ref'].split('/', 2)[2]
+    if branch == 'master':
+        commands = ['git', 'pull']
+        subprocess.run(commands, check=True)
+
+
+def github_hasher():
+    secret = os.environ['SECRET_GITHUB_TOKEN']
+    header_signature = flask.request.headers.get('X-Hub-Signature')
+    sha_name, signature = header_signature.split('=')
+    mac = hmac.new(secret.encode(), msg=flask.request.data, digestmod='sha1')
+    if not hmac.compare_digest(str(mac.hexdigest()), str(signature)):
+        raise ValueError('Github signature does not match stored token.')
